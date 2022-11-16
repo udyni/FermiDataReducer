@@ -505,6 +505,9 @@ class DataWorker(multiprocessing.Process):
 
                             # Initialize binned data if needed
                             if 'binning' in m and len(m['binning']) > 0:
+                                # Save binning information for later save
+                                self.output[tag]['__binning'] = copy.deepcopy(m['binning'])
+
                                 # Check binning dimensions
                                 sizes = ()
                                 for b in m['binning']:
@@ -593,7 +596,7 @@ class DataWorker(multiprocessing.Process):
             # Open output file
             with h5.File(save_file, 'w') as fh:
 
-                for k, data in self.output:
+                for k, data in self.output.items():
                     # Save metadata
                     if k == 'metadata':
                         self.data_s2s.save_metadata(data)
@@ -616,13 +619,13 @@ class DataWorker(multiprocessing.Process):
                         if 'bkg' in data:
                             self.__save_dataset(gv, 'bkg', data=data['bkg']['data'])
                             self.__save_dataset(gv, 'bkg_indexes', data=data['bkg']['indexes'])
-                        if 'binning' in self.options[k] and len(self.options[k]['binning']):
+                        if '__binning' in data:
                             # Save bin information
-                            n = len(self.options[k]['binning'])
+                            n = len(data['__binning'])
                             self.__save_dataset(gv, 'binning_dim', data=n, compression=False)
                             for i in range(n):
-                                self.__save_dataset(gv, "binning_dset_{0:d}".format(i), data=self.options[k]['binning'][i]['dataset'], compression=False)
-                                self.__save_dataset(gv, "binning_edge_{0:d}".format(i), data=self.options[k]['binning'][i]['bin_edges'])
+                                self.__save_dataset(gv, "binning_dset_{0:d}".format(i), data=data['__binning'][i]['dataset'], compression=False)
+                                self.__save_dataset(gv, "binning_edge_{0:d}".format(i), data=data['__binning'][i]['bin_edges'])
                             # Save binned data
                             self.__save_dataset(gv, 'b_sig', data=data['b_sig']['data'])
                             self.__save_dataset(gv, 'b_sig_indexes', data=data['b_sig']['indexes'])
