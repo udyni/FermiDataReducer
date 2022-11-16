@@ -468,102 +468,64 @@ class DataWorker(multiprocessing.Process):
                                 self.output[dout]['b_bkg']['indexes'][indexes + (i, slice(self.s2s_index, self.s2s_index+self.file_shots), )] = np.logical_and(bin_mask, bkg_mask)
 
                 # ============================================================================================================
-                # Check VMI
-                try:
-                    if 'vmi' in self.options:
+                # Check main data reduction
+                for m in self.options['main']:
+                    tag = m['tag']
+
+                    try:
                         # Load data
-                        data = self.options['vmi']['preprocess'](fh[self.options['vmi']['dataset']])
+                        if 'preprocess' in m and callable(m['preprocess']):
+                            data = m['preprocess'](fh[m['dataset']])
+                        else:
+                            data = fh[m['dataset']]
 
                         # Initialize if needed
-                        if self.output['vmi']['sig'] is None:
-                            if 'binning' in self.options['vmi'] and len(self.options['vmi']['binning']) > 0:
+                        if tag not in self.output:
+                            self.output[tag] = {}
+
+                            # Signal without binning
+                            self.output[tag]['sig'] = {}
+                            self.output[tag]['sig']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
+                            self.output[tag]['sig']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
+
+                            # Background without binning
+                            self.output[tag]['bkg'] = {}
+                            self.output[tag]['bkg']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
+                            self.output[tag]['bkg']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
+
+                            # Initialize binned data if needed
+                            if 'binning' in m and len(m['binning']) > 0:
                                 # Check binning dimensions
                                 sizes = ()
-                                for b in self.options['vmi']['binning']:
+                                for b in m['binning']:
                                     sizes += (len(b['bin_edges']) - 1, )
 
-                                # VMI image tensor
-                                self.output['vmi']['b_sig'] = {}
-                                self.output['vmi']['b_sig']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
-                                self.output['vmi']['b_sig']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
+                                # Binned signal tensor
+                                self.output[tag]['b_sig'] = {}
+                                self.output[tag]['b_sig']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
+                                self.output[tag]['b_sig']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
 
-                                # VMI image background tensor
-                                self.output['vmi']['b_bkg'] = {}
-                                self.output['vmi']['b_bkg']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
-                                self.output['vmi']['b_bkg']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
-
-                            # VMI without binning
-                            self.output['vmi']['sig'] = {}
-                            self.output['vmi']['sig']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
-                            self.output['vmi']['sig']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
-
-                            # VMI image background tensor
-                            self.output['vmi']['bkg'] = {}
-                            self.output['vmi']['bkg']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
-                            self.output['vmi']['bkg']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
+                                # Binned background tensor
+                                self.output[tag]['b_bkg'] = {}
+                                self.output[tag]['b_bkg']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
+                                self.output[tag]['b_bkg']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
 
                         # Run recursive binning
-                        if 'binning' in self.options['vmi'] and len(self.options['vmi']['binning']) > 0:
-                            dataset_binning('vmi', copy.deepcopy(self.options['vmi']['binning']))
+                        if 'binning' in m and len(m['binning']) > 0:
+                            dataset_binning(tag, copy.deepcopy(m['binning']))
 
                         # Sum without binning
-                        self.output['vmi']['sig']['data'] += np.squeeze(np.sum(data[np.logical_not(bkg_mask), :, :], axis=0))
-                        self.output['vmi']['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = np.logical_not(bkg_mask)
+                        self.output[tag]['sig']['data'] += np.squeeze(np.sum(data[np.logical_not(bkg_mask), ...], axis=0))
+                        self.output[tag]['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = np.logical_not(bkg_mask)
                         if np.sum(bkg_mask):
-                            self.output['vmi']['bkg']['data'] += np.squeeze(np.sum(data[bkg_mask, :, :], axis=0))
-                            self.output['vmi']['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = bkg_mask
+                            self.output[tag]['bkg']['data'] += np.squeeze(np.sum(data[bkg_mask, ...], axis=0))
+                            self.output[tag]['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = bkg_mask
 
-                except KeyError as e:
-                    self.logger.error("Failed to reduce VMI data for file '%s' (missing dataset '%s')", os.path.basename(f), str(e))
+                    except KeyError as e:
+                        self.logger.error(f"Failed to reduce '{tag}' data for file '{os.path.basename(f)}' (Missing dataset: '{e}')")
 
-                # ============================================================================================================
-                # Check TOF
-                try:
-                    if 'tof' in self.options:
-                        # Load data
-                        data = self.options['tof']['preprocess'](fh[self.options['tof']['dataset']])
-
-                        # Initialize if needed
-                        if self.output['tof']['sig'] is None:
-                            if 'binning' in self.options['tof'] and len(self.options['tof']['binning']) > 0:
-                                # Check binning dimensions
-                                sizes = ()
-                                for b in self.options['tof']['binning']:
-                                    sizes += (len(b['bin_edges']) - 1, )
-
-                                # TOF spectrum tensor
-                                self.output['tof']['b_sig'] = {}
-                                self.output['tof']['b_sig']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
-                                self.output['tof']['b_sig']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
-
-                                # TOF background spectrum tensor
-                                self.output['tof']['b_bkg'] = {}
-                                self.output['tof']['b_bkg']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
-                                self.output['tof']['b_bkg']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
-
-                            # TOF without binning
-                            self.output['tof']['sig'] = {}
-                            self.output['tof']['sig']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
-                            self.output['tof']['sig']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
-
-                            # TOF background spectrum without binning
-                            self.output['tof']['bkg'] = {}
-                            self.output['tof']['bkg']['data'] = np.zeros(shape=data.shape[1:], dtype=np.float64)
-                            self.output['tof']['bkg']['indexes'] = np.zeros(shape=(self.total_files * self.file_shots, ), dtype=np.bool)
-
-                        # Run recursive binning
-                        if 'binning' in self.options['tof'] and len(self.options['tof']['binning']) > 0:
-                            dataset_binning('tof', copy.deepcopy(self.options['tof']['binning']))
-
-                        # Sum without binning
-                        self.output['tof']['sig']['data'] += np.squeeze(np.sum(data[np.logical_not(bkg_mask), :], axis=0))
-                        self.output['tof']['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = np.logical_not(bkg_mask)
-                        if np.sum(bkg_mask):
-                            self.output['tof']['bkg']['data'] += np.squeeze(np.sum(data[bkg_mask, :], axis=0))
-                            self.output['tof']['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = bkg_mask
-
-                except KeyError as e:
-                    self.logger.error("Failed to reduce TOF data for file '%s' (missing dataset '%s')", os.path.basename(f), str(e))
+                    except Exception as e:
+                        self.logger.error(f"Failed to reduce '{tag}' data for file '{os.path.basename(f)}' (Error: '{e}')")
 
                 # ============================================================================================================
                 # Check advanced processing
@@ -688,22 +650,6 @@ class DataWorker(multiprocessing.Process):
 
         # Metadata
         self.output['metadata'] = {}
-
-        # VMI
-        if 'vmi' in self.options:
-            self.output['vmi'] = {}
-            self.output['vmi']['sig'] = None
-            self.output['vmi']['b_sig'] = None
-            self.output['vmi']['bkg'] = None
-            self.output['vmi']['b_bkg'] = None
-
-        # TOF
-        if 'tof' in self.options:
-            self.output['tof'] = {}
-            self.output['tof']['sig'] = None
-            self.output['tof']['b_sig'] = None
-            self.output['tof']['bkg'] = None
-            self.output['tof']['b_bkg'] = None
 
         # Advanced processing
         if 'advanced' in self.options:

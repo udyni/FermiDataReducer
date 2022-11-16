@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Run online data reducer
+FERMI LDM online data reducer
 
 @license: GPL v3 (c)2022
 @author: Michele Devetta <michele.devetta@cnr.it>
@@ -148,30 +148,32 @@ options['metadata'] = [
 ]
 
 
-# => VMI
-# Processing of the VMI image sum
-# options['vmi'] = {
-#     'dataset': 'vmi/andor',
-#     'preprocess': lambda x: camera_baseline(x), # Subtract camera baseline
-#     'binning': [
-# #        {'tag': 'i0', 'dataset': 'photon_diagnostics/FEL01/I0_monitor/iom_sh_a', 'bin_edges': [0, ] + list(range(60,80,2)) + [80, 100]}
-#     ],
-# }
+# => MAIN DATA REDUCTION
+options['main'] = [
 
+    # VMI: processing of the VMI image sum
+    {
+        'tag': 'vmi',
+        'dataset': 'vmi/andor',
+        'preprocess': ProcessingFunctions.camera_baseline, # Subtract camera baseline
+        'binning': [
+            #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0, ] + list(range(60,80,2)) + [80, 100]}
+        ],
+    },
 
-# => DIGITIZER
-# Processing of the digitizer trace for TOF or MBES
-options['tof'] = {
-#    'dataset': 'digitizer/channel1',
-    'dataset': 'digitizer/channel3',
-#    'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
-    'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
-    'binning': [
-#        {'tag': 'i0', 'dataset': 'photon_diagnostics/FEL01/I0_monitor/iom_sh_a', 'bin_edges': [0, ] + list(range(60,80,2)) + [80, 100]}
-        {'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},
-        {'tag': 'wl', 'dataset': 'spectrum_fit', 'preprocessing': lambda x: x[:, 0], 'bin_edges': [6.242, 6.2433, 6.2445]},
-    ],
-}
+    # DIGITIZER: processing of the digitizer trace for TOF or MBES
+    {
+        'tag': 'mbes',
+        #'dataset': 'digitizer/channel1',
+        'dataset': 'digitizer/channel3',
+        #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
+        'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
+        'binning': [
+            #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},
+            #{'tag': 'wl', 'dataset': 'spectrum_fit', 'preprocessing': lambda x: x[:, 0], 'bin_edges': [6.242, 6.2433, 6.2445]},
+        ],
+    },
+]
 
 
 # => ADVANCED PROCESSING
