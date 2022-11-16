@@ -461,11 +461,11 @@ class DataWorker(multiprocessing.Process):
 
                         else:
                             # We have reached the end of the binning definitions
-                            self.output[dout]['b_sig']['data'][indexes + (i, )] += np.squeeze(np.sum(data[np.logical_and(bin_mask, np.logical_not(bkg_mask)), ...], axis=0))
-                            self.output[dout]['b_sig']['indexes'][indexes + (i, slice(self.s2s_index, self.s2s_index+self.file_shots), )] = np.logical_and(bin_mask, np.logical_not(bkg_mask))
-                            if np.sum(bkg_mask):
-                                self.output[dout]['b_bkg']['data'][indexes + (i, )] += np.squeeze(np.sum(data[np.logical_and(bin_mask, bkg_mask), ...], axis=0))
-                                self.output[dout]['b_bkg']['indexes'][indexes + (i, slice(self.s2s_index, self.s2s_index+self.file_shots), )] = np.logical_and(bin_mask, bkg_mask)
+                            self.output[dout]['b_sig']['data'][indexes + (i, )] += np.squeeze(np.sum(data[np.logical_and(bin_mask, s_i), ...], axis=0))
+                            self.output[dout]['b_sig']['indexes'][indexes + (i, slice(self.s2s_index, self.s2s_index+self.file_shots), )] = np.logical_and(bin_mask, s_i)
+                            if np.sum(b_i):
+                                self.output[dout]['b_bkg']['data'][indexes + (i, )] += np.squeeze(np.sum(data[np.logical_and(bin_mask, b_i), ...], axis=0))
+                                self.output[dout]['b_bkg']['indexes'][indexes + (i, slice(self.s2s_index, self.s2s_index+self.file_shots), )] = np.logical_and(bin_mask, b_i)
 
                 # ============================================================================================================
                 # Check main data reduction
@@ -478,6 +478,16 @@ class DataWorker(multiprocessing.Process):
                             data = m['preprocess'](fh[m['dataset']])
                         else:
                             data = fh[m['dataset']]
+
+                        # Data filtering
+                        good = np.ones(shape=(data.shape[0], ), dtype=np.bool)
+                        if 'filters' in m and len(m['filters']) > 0:
+                            for f in m['filters']:
+                                try:
+                                    d = self.data_s2s.getDataset(f['dataset'], bn)
+                                    good = np.logical_and(good, f['processing'](d))
+                                except Exception as e:
+                                    self.logger.error(f"Failed to filter '{tag}' reduction on '{f['dataset']}' (Error: {e})")
 
                         # Initialize if needed
                         if tag not in self.output:
@@ -510,15 +520,19 @@ class DataWorker(multiprocessing.Process):
                                 self.output[tag]['b_bkg']['data'] = np.zeros(shape=sizes + data.shape[1:], dtype=np.float64)
                                 self.output[tag]['b_bkg']['indexes'] = np.zeros(shape=sizes + (self.total_files * self.file_shots, ), dtype=np.bool)
 
+                        # Signal and background masks
+                        s_i = np.logical_and(good, np.logical_not(bkg_mask))
+                        b_i = np.logical_and(good, bkg_mask)
+
                         # Run recursive binning
                         if 'binning' in m and len(m['binning']) > 0:
                             dataset_binning(tag, copy.deepcopy(m['binning']))
 
                         # Sum without binning
-                        self.output[tag]['sig']['data'] += np.squeeze(np.sum(data[np.logical_not(bkg_mask), ...], axis=0))
+                        self.output[tag]['sig']['data'] += np.squeeze(np.sum(data[s_i, ...], axis=0))
                         self.output[tag]['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = np.logical_not(bkg_mask)
-                        if np.sum(bkg_mask):
-                            self.output[tag]['bkg']['data'] += np.squeeze(np.sum(data[bkg_mask, ...], axis=0))
+                        if np.sum(b_i):
+                            self.output[tag]['bkg']['data'] += np.squeeze(np.sum(data[b_i, ...], axis=0))
                             self.output[tag]['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = bkg_mask
 
                     except KeyError as e:
