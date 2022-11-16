@@ -590,64 +590,45 @@ class DataWorker(multiprocessing.Process):
             # Create or update s2s
             self.data_s2s.update(s2s_file)
 
-            # Save metadata
-            self.data_s2s.save_metadata(self.output['metadata'])
-
             # Open output file
             with h5.File(save_file, 'w') as fh:
 
-                # Save VMI
-                if 'vmi' in self.output and self.output['vmi']['sig'] is not None:
-                    gv = fh.create_group('vmi')
-                    self.__save_dataset(gv, 'sig', data=self.output['vmi']['sig']['data'])
-                    self.__save_dataset(gv, 'sig_indexes', data=self.output['vmi']['sig']['indexes'])
-                    if 'bkg' in self.output['vmi']:
-                        self.__save_dataset(gv, 'bkg', data=self.output['vmi']['bkg']['data'])
-                        self.__save_dataset(gv, 'bkg_indexes', data=self.output['vmi']['bkg']['indexes'])
-                    if 'binning' in self.options['vmi'] and len(self.options['vmi']['binning']):
-                        # Save bin information
-                        n = len(self.options['vmi']['binning'])
-                        self.__save_dataset(gv, 'binning_dim', data=n, compression=False)
-                        for i in range(n):
-                            self.__save_dataset(gv, "binning_dset_{0:d}".format(i), data=self.options['vmi']['binning'][i]['dataset'], compression=False)
-                            self.__save_dataset(gv, "binning_edge_{0:d}".format(i), data=self.options['vmi']['binning'][i]['bin_edges'])
-                        # Save binned data
-                        self.__save_dataset(gv, 'b_sig', data=self.output['vmi']['b_sig']['data'])
-                        self.__save_dataset(gv, 'b_sig_indexes', data=self.output['vmi']['b_sig']['indexes'])
-                        if 'bkg' in self.output['vmi']:
-                            self.__save_dataset(gv, 'b_bkg', data=self.output['vmi']['b_bkg']['data'])
-                            self.__save_dataset(gv, 'b_bkg_indexes', data=self.output['vmi']['b_bkg']['indexes'])
+                for k, data in self.output:
+                    # Save metadata
+                    if k == 'metadata':
+                        self.data_s2s.save_metadata(data)
 
-                # Save TOF
-                if 'tof' in self.output and self.output['tof']['sig'] is not None:
-                    gt = fh.create_group('tof')
-                    self.__save_dataset(gt, 'sig', data=self.output['tof']['sig']['data'])
-                    self.__save_dataset(gt, 'sig_indexes', data=self.output['tof']['sig']['indexes'])
-                    if 'bkg' in self.output['tof']:
-                        self.__save_dataset(gt, 'bkg', data=self.output['tof']['bkg']['data'])
-                        self.__save_dataset(gt, 'bkg_indexes', data=self.output['tof']['bkg']['indexes'])
-                    if 'binning' in self.options['tof'] and len(self.options['tof']['binning']):
-                        # Save bin information
-                        n = len(self.options['tof']['binning'])
-                        self.__save_dataset(gt, 'binning_dim', data=n, compression=False)
-                        for i in range(n):
-                            self.__save_dataset(gt, "binning_dset_{0:d}".format(i), data=self.options['tof']['binning'][i]['dataset'], compression=False)
-                            self.__save_dataset(gt, "binning_edge_{0:d}".format(i), data=self.options['tof']['binning'][i]['bin_edges'])
-                        # Save binned data
-                        self.__save_dataset(gt, 'b_sig', data=self.output['tof']['b_sig']['data'])
-                        self.__save_dataset(gt, 'b_sig_indexes', data=self.output['tof']['b_sig']['indexes'])
-                        if 'bkg' in self.output['tof']:
-                            self.__save_dataset(gt, 'b_bkg', data=self.output['tof']['b_bkg']['data'])
-                            self.__save_dataset(gt, 'b_bkg_indexes', data=self.output['tof']['b_bkg']['indexes'])
+                    # Save advanced processing
+                    elif k == 'advanced':
+                        for k, v in self.output['advanced'].items():
+                            try:
+                                ga = fh.create_group(k)
+                                for tag, dset in v.items():
+                                    self.__save_dataset(ga, tag, data=dset)
+                            except Exception as e:
+                                self.logger.error("Failed to save output of advanced processing '%s' (Error: %s)", k, e)
 
-                if 'advanced' in self.output:
-                    for k, v in self.output['advanced'].items():
-                        try:
-                            ga = fh.create_group(k)
-                            for tag, dset in v.items():
-                                self.__save_dataset(ga, tag, data=dset)
-                        except Exception as e:
-                            self.logger.error("Failed to save output of advanced processing '%s' (Error: %s)", k, e)
+                    # Save main processing
+                    else:
+                        gv = fh.create_group(k)
+                        self.__save_dataset(gv, 'sig', data=data['sig']['data'])
+                        self.__save_dataset(gv, 'sig_indexes', data=data['sig']['indexes'])
+                        if 'bkg' in data:
+                            self.__save_dataset(gv, 'bkg', data=data['bkg']['data'])
+                            self.__save_dataset(gv, 'bkg_indexes', data=data['bkg']['indexes'])
+                        if 'binning' in self.options[k] and len(self.options[k]['binning']):
+                            # Save bin information
+                            n = len(self.options[k]['binning'])
+                            self.__save_dataset(gv, 'binning_dim', data=n, compression=False)
+                            for i in range(n):
+                                self.__save_dataset(gv, "binning_dset_{0:d}".format(i), data=self.options[k]['binning'][i]['dataset'], compression=False)
+                                self.__save_dataset(gv, "binning_edge_{0:d}".format(i), data=self.options[k]['binning'][i]['bin_edges'])
+                            # Save binned data
+                            self.__save_dataset(gv, 'b_sig', data=data['b_sig']['data'])
+                            self.__save_dataset(gv, 'b_sig_indexes', data=data['b_sig']['indexes'])
+                            if 'bkg' in data:
+                                self.__save_dataset(gv, 'b_bkg', data=data['b_bkg']['data'])
+                                self.__save_dataset(gv, 'b_bkg_indexes', data=data['b_bkg']['indexes'])
 
             # Actively close s2s file
             self.data_s2s.close()
