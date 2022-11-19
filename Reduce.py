@@ -170,7 +170,17 @@ options['metadata'] = [
             'roi':        'photon_diagnostics/Spectrometer/ROI',
         },
         'extra_args': {},
-    }
+    },
+    {
+        'tag': 'mbes_retardation',
+        'processing': ProcessingFunctions.mbes_retardation,
+        'dataset': {
+            'ret_v1': 'endstation/MagneticBottle/voltage_ch1',
+            'ret_v1_en': 'endstation/MagneticBottle/ch1_is_enabled',
+            'ret_v2': 'endstation/MagneticBottle/voltage_ch2',
+            'ret_v2_en': 'endstation/MagneticBottle/ch2_is_enabled',
+        },
+    },
 ]
 
 

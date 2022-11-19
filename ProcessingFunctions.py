@@ -134,17 +134,8 @@ def sample_processing_function(state, bkg_mask, test1, test2):
     return state
 
 
-def mbes_retardation(state, bkg_mask, ret_v1, ret_v1_en, ret_v2, ret_v2_en):
-    retard = ret_v1 * ret_v1_en + ret_v2 * ret_v2_en
-    if state is None:
-        state = {}
-        state['retardation'] = np.array([retard, ], dtype=np.float)
-
-    else:
-        if state['retardation'][-1] != retard:
-            state['retardation'] = np.append(state['ret'], retard)
-
-    return state
+def mbes_retardation(ret_v1, ret_v1_en, ret_v2, ret_v2_en):
+    return ret_v1 * ret_v1_en + ret_v2 * ret_v2_en
 
 
 def integrate_digitizer(trace, peaks, threshold, baseline):
