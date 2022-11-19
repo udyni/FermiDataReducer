@@ -184,7 +184,7 @@ class BrokerS2S:
 
 class DataWorker(multiprocessing.Process):
 
-    def __init__(self, job_queue, terminate_flag, options, log_level=Logger.INFO, log_port=9999):
+    def __init__(self, job_queue, terminate_flag, options, log_queue, log_level=Logger.INFO):
         """ Worker process constructor
         Worker(job_queue)
         """
@@ -194,7 +194,7 @@ class DataWorker(multiprocessing.Process):
 
         # Log info
         self.log_level = log_level
-        self.log_port = log_port
+        self.log_queue = log_queue
 
         # job management stuff
         self.job_queue = job_queue
@@ -212,11 +212,15 @@ class DataWorker(multiprocessing.Process):
         self.save_suffix = "reduced"
 
         # Stale times for files and runs
-        self.stale_run = multiprocessing.Value('i', 5 * 60)
+        self.stale_run = multiprocessing.Value('i', 0)
 
     def run(self):
+        # Clear stdout and stderr
+        sys.stdout = None
+        sys.stderr = None
+
         # Connect to logger server
-        self.logger = Logger(multiprocessing.current_process().name, self.log_level, f"localhost:{self.log_port}")
+        self.logger = Logger(self.log_queue, multiprocessing.current_process().name, self.log_level)
 
         # Start worker
         self.logger.info("Starting worker '%s'", self.name)
@@ -224,7 +228,7 @@ class DataWorker(multiprocessing.Process):
         # General pattern to match raw data filenames
         p = re.compile("Run_(\d+)_(\d+).h5")
 
-        while not self.terminate.value:
+        while not self.terminate_flag.value:
 
             # Get a new run job from the queue
             try:
@@ -257,7 +261,7 @@ class DataWorker(multiprocessing.Process):
 
                 search_path = os.path.join(remote_path, "rawdata", "*.h5")
 
-                while not self.terminate.value:
+                while not self.terminate_flag.value:
                     # Scan for new files
                     files = sorted(glob.glob(search_path))
                     new_files = []
@@ -368,7 +372,7 @@ class DataWorker(multiprocessing.Process):
                                 del bad_files[f]
 
                             # Check terminate flag so that we stop even if the new files list is very long...
-                            if self.terminate.value:
+                            if self.terminate_flag.value:
                                 break
 
                     # Check if the number of processed files is the same as the total number of files
@@ -393,8 +397,6 @@ class DataWorker(multiprocessing.Process):
 
             except queue.Empty:
                 # Nothing to be processed
-                if self.offline:
-                    break
                 time.sleep(2.0)
 
             except Exception as e:
@@ -402,7 +404,7 @@ class DataWorker(multiprocessing.Process):
                 self.logger.error("Unhandled exception (Error: %s)", e)
 
         # Terminating worker
-        self.logger.info("Terminating worker '%s'", self.name)
+        self.logger.info("Exiting from worker '%s'", self.name)
 
     def process(self, f):
         # Add one file to the processed data

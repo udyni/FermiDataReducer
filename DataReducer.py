@@ -7,7 +7,7 @@ Multiprocessing based data reducer for FERMI
 @author: Michele Devetta <michele.devetta@cnr.it>
 
 """
-
+import sys
 import os
 import re
 import signal
@@ -16,8 +16,7 @@ import multiprocessing
 from DataWorker import DataWorker
 
 # Logger server
-from Logger import Logger
-from LoggerServer import LoggerServer
+from Logger import Logger, LoggerListener
 
 
 class DataReducer(object):
@@ -27,10 +26,11 @@ class DataReducer(object):
             - remote path for raw data
             - local path to copy raw data (if 'None' a local copy of the data is not used)
         """
-        # Log file
-        self.log_server = LoggerServer(name="DataReducer", level=log_level)
-        self.log_server.start()
-        self.logger = Logger('DR Master', log_level, f"localhost:{log_port}")
+        # Logging
+        self._logging_queue = multiprocessing.Queue()
+        self._logger_listener = LoggerListener(self._logging_queue, level=log_level)
+        self._logger_listener.start()
+        self.logger = Logger(self._logging_queue, 'DR Master', log_level)
         self.logger.info("Starting DataReducer")
 
         # Store data paths
@@ -54,8 +54,8 @@ class DataReducer(object):
         # Start worker processes
         self.workers = []
         for i in range(nworkers):
-            self.workers.append(DataWorker(self.job_queue, self.terminate, options, log_level, log_port))
-            self.workers[-1].name = "Worker-{0:d}".format(i+1)
+            self.workers.append(DataWorker(self.job_queue, self.terminate, options, self._logging_queue, log_level))
+            self.workers[-1].name = f"Worker-{i+1}"
             self.workers[-1].start()
 
     def intHandler(self, signum, frame):
@@ -64,7 +64,7 @@ class DataReducer(object):
             self.terminate.value = 1
 
     def addLogFile(self, filename):
-        self.log_server.addLogFile(filename)
+        self._logger_listener.addLogFile(filename)
 
     def list_experiments(self, basepath):
         exp = []
@@ -132,12 +132,15 @@ class DataReducer(object):
         # Clean up
         for w in self.workers:
             w.join()
+            self.logger.info(f"Successfully joined worker {w.name} (Exitcode: {w.exitcode})")
 
-        self.log_server.server.shutdown()
-        self.log_server.join()
+        time.sleep(0.5)
 
-        # Start main process
-        self.logger.info("Done! Goodbye!")
+        # Clear job queue
+        while not self.job_queue.empty():
+            self.job_queue.get()
+
+        self._logger_listener.stop()
 
     def setStaleTimeRun(self, t):
         for w in self.workers:

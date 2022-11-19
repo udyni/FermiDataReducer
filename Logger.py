@@ -24,14 +24,14 @@ class Logger(object):
 
     """
 
-    def __init__(self, name="Default", level=logging.INFO, server=None):
+    def __init__(self, queue, name="Default", level=logging.INFO):
         """ Constructor.
         Accept as optional input parameters the logger name and the logging
         level.
         """
         self._name = name
         self._hname = name + "_handler"
-        self._server = server
+        self._queue = queue
         self._level = level
         self._init_logger()
 
@@ -48,15 +48,7 @@ class Logger(object):
             self._logger.handlers = []
 
         # Add handler
-        if self._server is not None:
-            try:
-                (host, port) = self._server.split(':')
-                _handler = logging.handlers.DatagramHandler(host, int(port))
-            except:
-                pass
-        else:
-            _handler = logging.StreamHandler()
-            _handler.setFormatter(logging.Formatter('[%(asctime)s] %(name)s:%(levelname)s:%(message)s'))
+        _handler = logging.handlers.QueueHandler(self._queue)
         _handler.setLevel(self._level)
         _handler.name = self._hname
         self._logger.addHandler(_handler)
@@ -118,3 +110,29 @@ class Logger(object):
     WARN = logging.WARN
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
+
+
+class LoggerListener(object):
+
+    def __init__(self, queue, level):
+        self._level = level
+
+        # Default StreamHandler
+        h = logging.StreamHandler()
+        h.setLevel(level)
+        h.setFormatter(logging.Formatter('[%(asctime)s] %(name)s:%(levelname)s:%(message)s', '%b %d, %H:%M:%S'))
+
+        # Create listener
+        self._listener = logging.handlers.QueueListener(queue, h)
+
+    def addLogFile(self, filename):
+        h = logging.FileHandler(filename)
+        h.setLevel(self._level)
+        h.setFormatter(logging.Formatter('[%(asctime)s] %(name)s:%(levelname)s:%(message)s', '%b %d, %H:%M:%S'))
+        self._listener.handlers = self._listener.handlers + (h, )
+
+    def start(self):
+        self._listener.start()
+
+    def stop(self):
+        self._listener.stop()
