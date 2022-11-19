@@ -5,7 +5,7 @@
 This module implements a general purpose logger class based on the logging
 module.
 
-@license: GPL v3 (c)2021
+@license: GPL v3 (c)2022
 @author: Michele Devetta <michele.devetta@cnr.it>
 
 """
