@@ -147,15 +147,9 @@ def mbes_retardation(state, bkg_mask, ret_v1, ret_v1_en, ret_v2, ret_v2_en):
     return state
 
 
-def integrate_digitizer(state, bkg_mask, trace):
-
-    trace = tof_with_threshold(trace, 12, [1, 2000])
-    p1 = np.sum(trace[:, 5740:5761], axis=1)
-
-    if state is None:
-        state = {}
-        state['p1'] = p1
-    else:
-        state['p1'] = np.append(state['p1'], p1)
-
-    return state
+def integrate_digitizer(trace, peaks, threshold, baseline):
+    trace = tof_with_threshold(trace, threshold, baseline)
+    out = np.zeros(shape=(trace.shape[0], len(peaks)), dtype=np.float64)
+    for i, p in enumerate(peaks):
+        out[:, i] = np.sum(trace[:, p[0]:p[1]], axis=1)
+    return out

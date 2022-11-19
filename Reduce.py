@@ -134,6 +134,20 @@ options['s2s'] = [
             'bunches': 'bunches',
         },
     },
+
+    # Integrate TOF peaks
+    {
+        'tag': 'tof_peaks',
+        'processing': ProcessingFunctions.integrate_digitizer,
+        'extra_args': {
+            'threshold': 12,
+            'baseline': [0, 2000],
+            'peaks': [(5360, 5390), (5395, 5415)],
+        },
+        'dataset': {
+            'trace': 'digitizer/channel3',
+        },
+    },
 ]
 
 
@@ -146,6 +160,17 @@ options['metadata'] = [
     #{'tag': 'back_p',       'dataset': 'endstation/analog_in/I1'},
     {'tag': 'gas_cell',     'dataset': f'photon_diagnostics/FEL{fel:02d}/Gas_Attenuator/Pressure'},
     #{'tag': 'phase',        'dataset': f'photon_source/FEL{fel:02d}/PhaseShifter5/DeltaPhase'},
+    {
+        'tag': 'spectrum_wl',
+        'processing': ProcessingFunctions.padres_spectrum_wavelength,
+        'dataset': {
+            'wavelength': 'photon_diagnostics/Spectrometer/Wavelength',
+            'p2m':        'photon_diagnostics/Spectrometer/Pixel2micron',
+            'span':       'photon_diagnostics/Spectrometer/WavelengthSpan',
+            'roi':        'photon_diagnostics/Spectrometer/ROI',
+        },
+        'extra_args': {},
+    }
 ]
 
 
