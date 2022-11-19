@@ -101,13 +101,19 @@ class BrokerS2S:
 
         else:
             # Running again... first check if we have space in bunches
-            if len(self.__bn) < + self.s2s_index + fs:
+            if len(self.__bn) < self.s2s_index + fs:
                 # Save __bn is shorter than needed. Previous reduction was incomplete
                 self.__complete = False
-                # Extend bunches
-                old_bn = self.__data['bunches']
-                self.__data['bunches'] = np.zeros(shape=(self.__nshots, ), dtype=bn.dtype)
-                self.__data['bunches'][0:self.s2s_index] = old_bn
+                self.logger.warning("Incomplete run. Completing...")
+                # Update number of shots
+                self.__nshots = newfile['Files_per_acquisition'] * newfile['ShotsPerFile']
+                # Extend all datasets
+                self.logger.debug(f"Expanding S2S datasets from {self.__bn.shape[0]} to {self.__nshots}")
+                for k, v in self.__data.items():
+                    old_data = v
+                    self.__data[k] = np.zeros(shape=(self.__nshots, ) + old_data.shape[1:], dtype=old_data.dtype)
+                    self.__data[k][0:self.s2s_index] = old_data
+                # Store new bunches
                 self.__data['bunches'][self.s2s_index:self.s2s_index+fs] = bn
 
             else:
@@ -175,10 +181,7 @@ class BrokerS2S:
         if dataset not in self.__data:
             self.__data[dataset] = self.__fh[dataset][()]
         # Create selector
-        if self.__bn is not None:
-            selector = np.isin(self.__bn, bunches)
-        else:
-            selector = np.isin(self.__data['bunches'], bunches)
+        selector = np.isin(self.__data['bunches'], bunches)
         # Return data
         return self.__data[dataset][selector]
 
@@ -192,7 +195,8 @@ class BrokerS2S:
         # Shot-to-shot index outside should be the same as inside otherwise we have a problem
         assert (shot_index == self.s2s_index), 'Shot index in S2S data does not match index in reduction, something went wrong.'
         # If we stop a re-reduction before it's completed, the output is not consistent with S2S data and we cannot save it
-        assert (self.__complete and self.s2s_index < len(self.__bn)), 'Incomplete reduction not consistent with S2S data. Cannot save results.'
+        if self.__complete:
+            assert self.s2s_index == len(self.__bn), 'Incomplete reduction not consistent with S2S data. Cannot save results.'
 
         # Check if we need to create a new file
         if self.__fh is None:
@@ -470,7 +474,19 @@ class DataWorker(multiprocessing.Process):
                 for dset in self.options['metadata']:
                     try:
                         if dset['tag'] not in self.output['metadata']:
-                            self.output['metadata'][dset['tag']] = fh[dset['dataset']]
+                            if 'processing' in dset and callable(dset['processing']):
+                                if type(dset['dataset']) is dict:
+                                    params = {}
+                                    for k, v in dset['dataset'].items():
+                                        params[k] = fh[v]
+                                    if 'extra_args' in dset and type(dset['extra_args']) is dict:
+                                        params.update(dset['extra_args'])
+                                    self.output['metadata'][dset['tag']] = dset['processing'](**params)
+                                else:
+                                    self.output['metadata'][dset['tag']] = dset['processing'](fh[dset['dataset']])
+
+                            else:
+                                self.output['metadata'][dset['tag']] = fh[dset['dataset']]
                         else:
                             # TODO: We may check that the metadata is consistent through all the files...
                             pass
