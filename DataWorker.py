@@ -69,10 +69,12 @@ class BrokerS2S:
             self.__bn = self.__fh['bunches'][()]
             self.__nshots = len(self.__bn)
             self.__data['bunches'] = self.__bn
+            self.__complete = True  # This is just a guess here...
         except Exception:
             self.__fh = None
             self.__bn = None
             self.__nshots = None
+            self.__complete = False
 
     def __del__(self):
         try:
@@ -91,18 +93,41 @@ class BrokerS2S:
         fs = len(bn)
 
         # Check that bunch numbers are loaded
-        if self.__bn is None:
+        if self.__bn is None or not self.__complete:
+            # New reduction or incomplete one, add bunches to array
             if 'bunches' not in self.__data:
                 self.__data['bunches'] = np.zeros(shape=(self.__nshots, ), dtype=bn.dtype)
             self.__data['bunches'][self.s2s_index:self.s2s_index+fs] = bn
+
+        else:
+            # Running again... first check if we have space in bunches
+            if len(self.__bn) < + self.s2s_index + fs:
+                # Save __bn is shorter than needed. Previous reduction was incomplete
+                self.__complete = False
+                # Extend bunches
+                old_bn = self.__data['bunches']
+                self.__data['bunches'] = np.zeros(shape=(self.__nshots, ), dtype=bn.dtype)
+                self.__data['bunches'][0:self.s2s_index] = old_bn
+                self.__data['bunches'][self.s2s_index:self.s2s_index+fs] = bn
+
+            else:
+                # Check that bunch numbers match
+                assert np.all(self.__data['bunches'][self.s2s_index:self.s2s_index+fs] == bn), f"Bunch numbers for file {newfile.filename} do not match s2s data"
 
         for d in self.datasets:
             tag = d['tag']
             dset = d['dataset']
             last_dset = None
-            if self.__fh is not None and tag in self.__fh:
+            if self.__fh is not None and tag in self.__fh and self.__complete:
                 # Dataset is already present from a previous reduction
                 continue
+
+            # If we are completing a previous reduction we may need to extend the array...
+            if tag in self.__data and len(self.__data[tag]) < self.s2s_index+fs:
+                # Array need extension
+                old_data = self.__data[tag]
+                self.__data[tag] = np.zeros(shape=(self.__nshots, ) + getattr(old_data, 'shape', ())[1:], dtype=getattr(old_data, 'dtype', np.float64))
+                self.__data[tag][0:self.s2s_index, ...] = old_data
 
             try:
                 # Load data
@@ -126,13 +151,13 @@ class BrokerS2S:
                     last_dset = dset
                     data = newfile[dset]
 
+                # Pre-allocation
                 if tag not in self.__data:
-                    if len(getattr(data, 'shape', ())) > 1:
-                        self.__data[tag] = np.zeros(shape=(self.__nshots, ) + data.shape[1:], dtype=data.dtype)
-                    else:
-                        self.__data[tag] = np.zeros(shape=(self.__nshots, ), dtype=getattr(data, 'dtype', np.float64))
+                    self.__data[tag] = np.zeros(shape=(self.__nshots, ) + getattr(data, 'shape', ())[1:], dtype=getattr(data, 'dtype', np.float64))
 
+                # Store new data
                 self.__data[tag][self.s2s_index:self.s2s_index+fs, ...] = data
+
             except Exception as e:
                 self.logger.error("Failed to load dataset '%s' from file '%s' (Error: %s)", last_dset, os.path.basename(newfile.filename), e)
                 # If the dataset is float, set as nan the missing values
@@ -165,29 +190,21 @@ class BrokerS2S:
 
     def update(self, shot_index):
         # Shot-to-shot index outside should be the same as inside otherwise we have a problem
-        assert(shot_index == self.s2s_index)
+        assert (shot_index == self.s2s_index), 'Shot index in S2S data does not match index in reduction, something went wrong.'
+        # If we stop a re-reduction before it's completed, the output is not consistent with S2S data and we cannot save it
+        assert (self.__complete and self.s2s_index < len(self.__bn)), 'Incomplete reduction not consistent with S2S data. Cannot save results.'
+
         # Check if we need to create a new file
         if self.__fh is None:
             # Need to create a new file
             self.__fh = h5.File(self.filename, 'w')
-            new_file = True
-        else:
-            new_file = False
 
         # Update or create datasets
-        if new_file:
-            # Cut data to s2s index to remove useless zeros
-            for k, v in self.__data.items():
+        for k, v in self.__data.items():
+            if k in self.__fh and not self.__complete:
+                del self.__fh[k]
+            if k not in self.__fh:
                 self.__fh.create_dataset(k, data=v[0:self.s2s_index], compression='gzip')
-
-        else:
-            # We have an old file. We need to see if we have to update it
-            for k, v in self.__data.items():
-                # If the shape of the orignal file is not the same as the processed data we should fail the save
-                # as the reduction was halted by the user
-                assert(v.shape[0]==len(self.__bn) and self.s2s_index==len(self.__bn))
-                if k not in self.__fh:
-                    self.__fh.create_dataset(k, data=v[0:self.s2s_index], compression='gzip')
 
     def save_metadata(self, metadata):
         for k, v in metadata.items():
