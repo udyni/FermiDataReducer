@@ -62,9 +62,10 @@ class BrokerS2S:
         self.s2s_index = 0
         self.datasets = datasets
         self.logger = logger
+        self.filename = filename
         self.__data = {}
         try:
-            self.__fh = h5.File(filename, 'r+')
+            self.__fh = h5.File(self.filename, 'r+')
             self.__bn = self.__fh['bunches'][()]
             self.__nshots = len(self.__bn)
             self.__data['bunches'] = self.__bn
@@ -162,13 +163,31 @@ class BrokerS2S:
                 return True
         return False
 
-    def update(self, filename):
+    def update(self, shot_index):
+        # Shot-to-shot index outside should be the same as inside otherwise we have a problem
+        assert(shot_index == self.s2s_index)
+        # Check if we need to create a new file
         if self.__fh is None:
-            self.__fh = h5.File(filename, 'w')
+            # Need to create a new file
+            self.__fh = h5.File(self.filename, 'w')
+            new_file = True
+        else:
+            new_file = False
+
         # Update or create datasets
-        for k, v in self.__data.items():
-            if k not in self.__fh:
-                self.__fh.create_dataset(k, data=v, compression='gzip')
+        if new_file:
+            # Cut data to s2s index to remove useless zeros
+            for k, v in self.__data.items():
+                self.__fh.create_dataset(k, data=v[0:self.s2s_index], compression='gzip')
+
+        else:
+            # We have an old file. We need to see if we have to update it
+            for k, v in self.__data.items():
+                # If the shape of the orignal file is not the same as the processed data we should fail the save
+                # as the reduction was halted by the user
+                assert(v.shape[0]==len(self.__bn) and self.s2s_index==len(self.__bn))
+                if k not in self.__fh:
+                    self.__fh.create_dataset(k, data=v[0:self.s2s_index], compression='gzip')
 
     def save_metadata(self, metadata):
         for k, v in metadata.items():
@@ -203,7 +222,7 @@ class DataWorker(multiprocessing.Process):
         self.offline = False
 
         # Store terminate flag
-        self.terminate = terminate_flag
+        self.terminate_flag = terminate_flag
 
         # Options
         self.options = options
@@ -484,12 +503,12 @@ class DataWorker(multiprocessing.Process):
                         # Data filtering
                         good = np.ones(shape=(data.shape[0], ), dtype=np.bool)
                         if 'filters' in m and len(m['filters']) > 0:
-                            for f in m['filters']:
+                            for filter in m['filters']:
                                 try:
-                                    d = self.data_s2s.getDataset(f['dataset'], bn)
-                                    good = np.logical_and(good, f['processing'](d))
+                                    d = self.data_s2s.getDataset(filter['dataset'], bn)
+                                    good = np.logical_and(good, filter['processing'](d))
                                 except Exception as e:
-                                    self.logger.error(f"Failed to filter '{tag}' reduction on '{f['dataset']}' (Error: {e})")
+                                    self.logger.error(f"Failed to filter '{tag}' reduction on '{filter['dataset']}' (Error: {e})")
 
                         # Initialize if needed
                         if tag not in self.output:
@@ -587,13 +606,12 @@ class DataWorker(multiprocessing.Process):
 
     def save(self, run_number, path):
         # Save the results when the run is all processed
-        s2s_file = os.path.join(path, f"Run_{run_number:03d}_s2s.h5")
         save_file = os.path.join(path, f"Run_{run_number:03d}_{self.save_suffix}.h5")
         self.logger.info("Saving file %s", save_file)
 
         try:
             # Create or update s2s
-            self.data_s2s.update(s2s_file)
+            self.data_s2s.update(self.s2s_index)
 
             # Open output file
             with h5.File(save_file, 'w') as fh:
@@ -617,10 +635,10 @@ class DataWorker(multiprocessing.Process):
                     else:
                         gv = fh.create_group(k)
                         self.__save_dataset(gv, 'sig', data=data['sig']['data'])
-                        self.__save_dataset(gv, 'sig_indexes', data=data['sig']['indexes'])
+                        self.__save_dataset(gv, 'sig_indexes', data=data['sig']['indexes'][0:self.s2s_index, ...])
                         if 'bkg' in data:
                             self.__save_dataset(gv, 'bkg', data=data['bkg']['data'])
-                            self.__save_dataset(gv, 'bkg_indexes', data=data['bkg']['indexes'])
+                            self.__save_dataset(gv, 'bkg_indexes', data=data['bkg']['indexes'][0:self.s2s_index, ...])
                         if '__binning' in data:
                             # Save bin information
                             n = len(data['__binning'])
@@ -630,10 +648,10 @@ class DataWorker(multiprocessing.Process):
                                 self.__save_dataset(gv, "binning_edge_{0:d}".format(i), data=data['__binning'][i]['bin_edges'])
                             # Save binned data
                             self.__save_dataset(gv, 'b_sig', data=data['b_sig']['data'])
-                            self.__save_dataset(gv, 'b_sig_indexes', data=data['b_sig']['indexes'])
+                            self.__save_dataset(gv, 'b_sig_indexes', data=data['b_sig']['indexes'][0:self.s2s_index, ...])
                             if 'bkg' in data:
                                 self.__save_dataset(gv, 'b_bkg', data=data['b_bkg']['data'])
-                                self.__save_dataset(gv, 'b_bkg_indexes', data=data['b_bkg']['indexes'])
+                                self.__save_dataset(gv, 'b_bkg_indexes', data=data['b_bkg']['indexes'][0:self.s2s_index, ...])
 
             # Actively close s2s file
             self.data_s2s.close()
