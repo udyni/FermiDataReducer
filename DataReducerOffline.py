@@ -21,7 +21,15 @@ from DataWorker import DataWorker
 
 class DataReducerOffline(object):
 
-    def __init__(self, options, remote_path, save_path=None, save_suffix="reduced", nworkers=2, log_level=Logger.INFO):
+    def __init__(
+            self,
+            options: dict,
+            remote_path: str,
+            save_path: str = None,
+            save_suffix: str = "reduced",
+            nworkers: int = 2,
+            log_level: int = Logger.INFO
+        ):
         """ Create DataReducerOffline object
             - remote path for raw data
             - save path to save reduced data
@@ -61,9 +69,8 @@ class DataReducerOffline(object):
         with self.terminate_flag.get_lock():
             self.terminate_flag.value = 1
 
-    def addLogFile(self, filename):
-        if self.log_server is not None:
-            self.log_server.addLogFile(filename)
+    def addLogFile(self, filename: str):
+        self._logger_listener.addLogFile(filename)
 
     def list_experiments(self, basepath):
         exp = []
@@ -85,7 +92,22 @@ class DataReducerOffline(object):
                     runs.append(int(m.groups()[0]))
         return runs
 
-    def run(self, runs2reduce):
+    def run(self, runs2reduce: list):
+
+        # Inspect runs2reduce
+        __runs2reduce = []
+        for i, r in enumerate(runs2reduce):
+            if r is Ellipsis:
+                if i == 0 or i == len(runs2reduce) - 1:
+                    # First and last element cannot be Ellipsis
+                    continue
+                s = runs2reduce[i - 1]
+                e = runs2reduce[i + 1]
+                if s is Ellipsis or e is Ellipsis:
+                    continue
+                __runs2reduce += list(range(s + 1, e))
+            elif type(r) is int:
+                __runs2reduce.append(r)
 
         # Start workers
         for w in self.workers:
@@ -100,7 +122,7 @@ class DataReducerOffline(object):
             runs = self.list_runs(self.rpath, exp)
 
             for r in runs:
-                if r not in runs2reduce:
+                if r not in __runs2reduce:
                     continue
 
                 # New run. Create paths
@@ -121,12 +143,12 @@ class DataReducerOffline(object):
         if not self.terminate_flag.value:
             with self.terminate_flag.get_lock():
                 self.terminate_flag.value = 1
-            self.logger.info("Date reduction complete. Terminating...")
+            self.logger.info("Data reduction complete. Terminating...")
 
         # Clean up
         for w in self.workers:
-            self.logger.info("Joining %s...", w.name)
             w.join()
+            self.logger.info(f"Successfully joined worker {w.name} (Exitcode: {w.exitcode})")
 
         time.sleep(0.5)
 

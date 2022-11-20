@@ -21,7 +21,16 @@ from Logger import Logger, LoggerListener
 
 class DataReducer(object):
 
-    def __init__(self, options, remote_path, local_path=None, save_path=None, nworkers=2, skip_runs=0, log_level=Logger.INFO):
+    def __init__(
+            self,
+            options: dict,
+            remote_path: str,
+            local_path: str = None,
+            save_path: str = None,
+            nworkers: int = 2,
+            skip_runs: int = 0,
+            log_level: int = Logger.INFO,
+        ):
         """ Create DataReducer object
             - remote path for raw data
             - local path to copy raw data (if 'None' a local copy of the data is not used)
