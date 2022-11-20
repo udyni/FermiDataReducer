@@ -50,6 +50,9 @@ runs_to_skip = 0
 # FEL source in use (1 or 2)
 fel = 2
 
+# Enable DEBUG
+DEBUG = False
+
 
 options = {}
 ## ============================================================================
@@ -136,18 +139,18 @@ options['s2s'] = [
     },
 
     # Integrate TOF peaks
-    {
-        'tag': 'tof_peaks',
-        'processing': ProcessingFunctions.integrate_digitizer,
-        'extra_args': {
-            'threshold': 12,
-            'baseline': [0, 2000],
-            'peaks': [(5360, 5390), (5395, 5415)],
-        },
-        'dataset': {
-            'trace': 'digitizer/channel3',
-        },
-    },
+    # {
+    #     'tag': 'tof_peaks',
+    #     'processing': ProcessingFunctions.integrate_digitizer,
+    #     'extra_args': {
+    #         'threshold': 12,
+    #         'baseline': [0, 2000],
+    #         'peaks': [(5360, 5390), (5395, 5415)],
+    #     },
+    #     'dataset': {
+    #         'trace': 'digitizer/channel3',
+    #     },
+    # },
 ]
 
 
@@ -205,7 +208,8 @@ options['main'] = [
         #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
         'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
         'filters': [
-            {'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_not(np.isnan(x[:, 0]))},
+            {'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_not(np.isnan(x[:,0]))},
+            {'dataset': 'spectrum_int', 'processing': lambda x: np.logical_and(~np.isnan(x), x > 5e5)},
         ],
         'binning': [
             #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},
@@ -234,7 +238,7 @@ options['main'] = [
 
 #################################################################################################
 # RUN DATA REDUCER - DO NOT MODIFY
-dr = DataReducer(options, remote_path, local_path, save_path=save_path, nworkers=number_of_workers, skip_runs=runs_to_skip, log_level=Logger.DEBUG)
+dr = DataReducer(options, remote_path, local_path, save_path=save_path, nworkers=number_of_workers, skip_runs=runs_to_skip, log_level=Logger.DEBUG if DEBUG else Logger.INFO)
 dr.setStaleTimeRun(stale_run)
 dr.addLogFile(logfile)
 dr.run()
