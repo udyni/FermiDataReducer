@@ -149,6 +149,7 @@ options['s2s'] = [
             'slu_dec': 'user_laser/decimation/State',
             'slu_bn_start': 'user_laser/decimation/BNStart',
             'slu_sequence': 'user_laser/decimation/Sequence',
+            'slu_shutter': 'user_laser/shutter_opened',
         },
     },
 
