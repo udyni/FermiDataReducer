@@ -90,6 +90,19 @@ def fit_padres_spectrum(spectrum, wavelength, p2m, span, roi):
 def background_sequence(bunches, period, phase):
     return np.mod(bunches, period) == phase
 
+def generic_background_sequence(bunches, period, phase, slu_dec, slu_bn_start, slu_sequence):
+    if period != -1 and slu_dec == 'OFF':
+        # Source background sequence is on
+        return np.mod(bunches, period) == phase
+
+    if period == -1 and slu_dec != 'OFF':
+        # Slu decimation is on
+        slu_period = len(slu_sequence)
+        slu_phase = np.mod(slu_bn_start, slu_period)
+        return np.logical_not(np.mod(bunches + slu_phase, slu_period))
+
+    return np.full(bunches.shape, False, dtype=bool)
+
 
 # =========================
 # Processing function for online data analysis

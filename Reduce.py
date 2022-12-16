@@ -126,15 +126,29 @@ options['s2s'] = [
     #         'period': 'Background_Period',
     #     }
     # },
-    { # Background sequence on the SLU at 25 Hz
+    # { # Background sequence on the SLU at 25 Hz
+    #     'tag': 'background',
+    #     'processing': ProcessingFunctions.background_sequence,
+    #     'extra_args': {
+    #         'period': 2,
+    #         'phase': 1,
+    #     },
+    #     'dataset': {
+    #         'bunches': 'bunches',
+    #     },
+    # },
+    { # Generic background sequence that should handle both SLU decimation and source background shots
         'tag': 'background',
-        'processing': ProcessingFunctions.background_sequence,
+        'processing': ProcessingFunctions.generic_background_sequence,
         'extra_args': {
-            'period': 2,
-            'phase': 1,
+            'phase': 0,
         },
         'dataset': {
             'bunches': 'bunches',
+            'period': 'Background_Period',
+            'slu_dec': 'user_laser/decimation/State',
+            'slu_bn_start': 'user_laser/decimation/BNStart',
+            'slu_sequence': 'user_laser/decimation/Sequence',
         },
     },
 
