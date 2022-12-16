@@ -9,6 +9,7 @@ Data reduction worker
 """
 
 import sys
+import inspect
 import traceback
 import os
 import re
@@ -644,9 +645,49 @@ class DataWorker(multiprocessing.Process):
             if compression and len(data) == 1 or type(data) in (str, int, float):
                 # Disable compression for scalars
                 compression = False
-            obj.create_dataset(name, data=data, compression='gzip' if compression else None)
+            dset = obj.create_dataset(name, data=data, compression='gzip' if compression else None)
+            return dset
         except Exception as e:
             self.logger.error("Failed to save dataset '%s' (Error: %s)", name, e)
+            return None
+
+    def __extract_from_dict(self, code, key):
+        i = code.find(key) + len(key) + 1
+        j = i
+        termination = (',', '}')
+        looking_for = []
+        while j < len(code):
+            if not len(looking_for) and code[j] in termination:
+                return code[i:j].strip()
+
+            if len(looking_for) and code[j] == looking_for[-1]:
+                looking_for.pop()
+            elif code[j] == '(':
+                looking_for.append(')')
+            elif code[j] == '[':
+                looking_for.append(']')
+
+            j += 1
+
+        return code[i:].strip()
+
+    def __add_options_metadata(self, section, tag, h5_obj):
+        # Search for the tag
+        for obj in self.options[section]:
+            if obj['tag'] == tag:
+                # Found! Add attributes
+                if 'filters' in obj and len(obj['filters']):
+                    h5_obj.attrs['filters_on'] = True
+                    filters_str = []
+                    for f in obj['filters']:
+                        src = self.__extract_from_dict(inspect.getsource(f['processing']).strip(), "'processing'")
+                        filters_str.append(f"Dataset: {f['dataset']} Processing: {src}")
+                    h5_obj.attrs['filters'] = filters_str
+                else:
+                    h5_obj.attrs['filters_on'] = True
+
+                if 'preprocess' in obj:
+                    h5_obj.attrs['preprocess'] = self.__extract_from_dict(inspect.getsource(obj['preprocess']), "'preprocess'")
 
     def save(self, run_number, path):
         # Save the results when the run is all processed
@@ -677,7 +718,11 @@ class DataWorker(multiprocessing.Process):
 
                     # Save main processing
                     else:
+                        # Create group
                         gv = fh.create_group(k)
+                        # Add metadata with the current configuration
+                        self.__add_options_metadata('main', k, gv)
+                        # Create datasets
                         self.__save_dataset(gv, 'sig', data=data['sig']['data'])
                         self.__save_dataset(gv, 'sig_indexes', data=data['sig']['indexes'][0:self.s2s_index, ...])
                         if 'bkg' in data:
