@@ -292,7 +292,7 @@ class DataWorker(multiprocessing.Process):
                 self.clean()
 
                 # Check if the run has already been reduced, so that we can load s2s datasets
-                self.data_s2s = BrokerS2S(self.options['s2s'], os.path.join(save_path, f"Run_{run_number:3d}_s2s.h5"), self.logger)
+                self.data_s2s = BrokerS2S(self.options['s2s'], os.path.join(save_path, f"Run_{run_number:03d}_s2s.h5"), self.logger)
 
                 # Create local_path if needed
                 if local_path is not None:
@@ -339,7 +339,7 @@ class DataWorker(multiprocessing.Process):
                                     last_size = s.st_size
                                     count = 0
                                     while True:
-                                        time.sleep(2)
+                                        time.sleep(1)
                                         s = os.stat(f)
                                         if s.st_size != last_size:
                                             count = 0
@@ -347,8 +347,8 @@ class DataWorker(multiprocessing.Process):
                                         else:
                                             count += 1
 
-                                        # If the size was the same for the last 3 checks than go on
-                                        if count >= 3:
+                                        # If the size was the same for the last 4 checks than go on
+                                        if count >= 4:
                                             break
 
                                 # Try to open file
@@ -425,7 +425,8 @@ class DataWorker(multiprocessing.Process):
                         break
 
                     elif (time.time() - last_file) > self.stale_run.value:
-                        # 5 minutes elapsed without any new file. We can assume that the run was aborted.
+                        # Check for stale runs.
+                        # If the configured time elapsed without any new file, we can assume that the run was aborted.
                         break
 
                     else:
