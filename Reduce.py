@@ -74,7 +74,7 @@ options['s2s'] = [
 
     # Mirror photocurrent
     {'tag': 'vdm',         'dataset': 'photon_diagnostics/VDM-LDM/photocurrent'},
-    {'tag': f'pm{fel:d}a', 'dataset': f'photon_diagnostics/PM{fel:d}A/photocurrent'},
+    #{'tag': f'pm{fel:d}a', 'dataset': f'photon_diagnostics/PM{fel:d}A/photocurrent'},
 
     # LDM photodiode
     #{'tag': 'i0_ldm',    'dataset': 'photon_diagnostics/photodiode_ldm/Id'},
@@ -82,7 +82,7 @@ options['s2s'] = [
 
     # SLU
     {'tag': 'delay',       'dataset': 'user_laser/delay_line/position'},
-    {'tag': 'slu_i0',      'dataset': 'user_laser/energy_meter/Energy1'},
+    #{'tag': 'slu_i0',      'dataset': 'user_laser/energy_meter/Energy1'},
     {'tag': 'slu_i0_25hz', 'dataset': 'user_laser/energy_meter/Energy2'},
 
     # PADRES spectrometer
@@ -217,8 +217,22 @@ options['main'] = [
     # DIGITIZER: processing of the digitizer trace for TOF or MBES
     {
         'tag': 'mbes',
-        #'dataset': 'digitizer/channel1',
         'dataset': 'digitizer/channel3',
+        #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
+        'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
+        'filters': [
+            {'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_not(np.isnan(x[:,0]))},
+            {'dataset': 'spectrum_int', 'processing': lambda x: np.logical_and(~np.isnan(x), x > 5e5)},
+        ],
+        'binning': [
+            #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},
+            #{'tag': 'wl', 'dataset': 'spectrum_fit', 'preprocessing': lambda x: x[:, 0], 'bin_edges': [6.242, 6.2433, 6.2445]},
+        ],
+    },
+
+    {
+        'tag': 'tof',
+        'dataset': 'digitizer/channel1',
         #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
         'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
         'filters': [
