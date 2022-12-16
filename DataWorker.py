@@ -254,6 +254,9 @@ class DataWorker(multiprocessing.Process):
         # Stale times for files and runs
         self.stale_run = multiprocessing.Value('i', 0)
 
+        # Idle flag
+        self.idle = multiprocessing.Value('i', 1)
+
     def run(self):
         # Clear stdout and stderr
         sys.stdout = None
@@ -272,6 +275,9 @@ class DataWorker(multiprocessing.Process):
 
             # Get a new run job from the queue
             try:
+                with self.idle.get_lock():
+                    self.idle.value = 0
+
                 (run_number, remote_path, local_path, save_path) = self.job_queue.get(block=False)
 
                 # We have a run to reduce
@@ -366,6 +372,7 @@ class DataWorker(multiprocessing.Process):
                                         processed_files.append(f)
                                         continue
                                     else:
+                                        # Open failed. Stop processing and try again
                                         break
 
                                 # Copy new file if local path is defined
@@ -427,6 +434,7 @@ class DataWorker(multiprocessing.Process):
                     elif (time.time() - last_file) > self.stale_run.value:
                         # Check for stale runs.
                         # If the configured time elapsed without any new file, we can assume that the run was aborted.
+                        self.logger.warning(f"Run {run_number} is stale. Terminating at file {len(processed_files)}.")
                         break
 
                     else:
@@ -438,6 +446,8 @@ class DataWorker(multiprocessing.Process):
 
             except queue.Empty:
                 # Nothing to be processed
+                with self.idle.get_lock():
+                    self.idle.value = 1
                 time.sleep(2.0)
 
             except Exception as e:

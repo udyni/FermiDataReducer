@@ -71,7 +71,7 @@ options['s2s'] = [
 
     # Mirror photocurrent
     {'tag': 'vdm',         'dataset': 'photon_diagnostics/VDM-LDM/photocurrent'},
-    {'tag': f'pm{fel:d}a', 'dataset': f'photon_diagnostics/PM{fel:d}A/photocurrent'},
+    #{'tag': f'pm{fel:d}a', 'dataset': f'photon_diagnostics/PM{fel:d}A/photocurrent'},
 
     # LDM photodiode
     #{'tag': 'i0_ldm',    'dataset': 'photon_diagnostics/photodiode_ldm/Id'},
@@ -123,15 +123,29 @@ options['s2s'] = [
     #         'period': 'Background_Period',
     #     }
     # },
-    { # Background sequence on the SLU at 25 Hz
+    # { # Background sequence on the SLU at 25 Hz
+    #     'tag': 'background',
+    #     'processing': ProcessingFunctions.background_sequence,
+    #     'extra_args': {
+    #         'period': 2,
+    #         'phase': 1,
+    #     },
+    #     'dataset': {
+    #         'bunches': 'bunches',
+    #     },
+    # },
+    { # Generic background sequence that should handle both SLU decimation and source background shots
         'tag': 'background',
-        'processing': ProcessingFunctions.background_sequence,
+        'processing': ProcessingFunctions.generic_background_sequence,
         'extra_args': {
-            'period': 2,
-            'phase': 1,
+            'phase': 0,
         },
         'dataset': {
             'bunches': 'bunches',
+            'period': 'Background_Period',
+            'slu_dec': 'user_laser/decimation/State',
+            'slu_bn_start': 'user_laser/decimation/BNStart',
+            'slu_sequence': 'user_laser/decimation/Sequence',
         },
     },
 
@@ -205,9 +219,23 @@ options['main'] = [
         #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
         'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
         'filters': [
-            #{'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_and(x[:,0] > 6.902, x[:,0] < 6.908)},
-            {'dataset': 'spectrum_fit', 'processing': lambda x: ~np.isnan(x[:,0])},
-            {'dataset': 'spectrum_int', 'processing': lambda x: np.logical_and(~np.isnan(x), x > 0.2e7)},
+            #{'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_not(np.isnan(x[:,0]))},
+            #{'dataset': 'spectrum_int', 'processing': lambda x: np.logical_and(~np.isnan(x), x > 5e5)},
+        ],
+        'binning': [
+            #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},
+            #{'tag': 'wl', 'dataset': 'spectrum_fit', 'preprocessing': lambda x: x[:, 0], 'bin_edges': [6.242, 6.2433, 6.2445]},
+        ],
+    },
+
+    {
+        'tag': 'tof',
+        'dataset': 'digitizer/channel1',
+        #'preprocess': lambda x: ProcessingFunctions.tof_baseline(x, [1, 2000]), # Subtract digitizer baseline
+        'preprocess': lambda x: ProcessingFunctions.tof_with_threshold(x, 12, [1,2000]), # Subtract digitizer baseline and apply threshold
+        'filters': [
+            #{'dataset': 'spectrum_fit', 'processing': lambda x: np.logical_not(np.isnan(x[:,0]))},
+            #{'dataset': 'spectrum_int', 'processing': lambda x: np.logical_and(~np.isnan(x), x > 5e5)},
         ],
         'binning': [
             #{'tag': 'i0', 'dataset': 'spectrum_int', 'bin_edges': [0.4e7, 0.6e7, 0.8e7, 1e7, 1.2e7]},

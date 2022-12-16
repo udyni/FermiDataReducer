@@ -13,6 +13,7 @@ import re
 import time
 import signal
 import multiprocessing
+import numpy as np
 
 # Logger server
 from Logger import Logger, LoggerListener
@@ -137,7 +138,17 @@ class DataReducerOffline(object):
             if self.terminate_flag.value:
                 self.logger.info("Data reduction was interrupted. Terminating...")
                 break
-            time.sleep(5.0)
+            time.sleep(2.0)
+
+        # Check that all workers are now idle
+        worker_idle = np.full((len(self.workers), ), False, dtype=bool)
+        while True:
+            for i, w in enumerate(self.workers):
+                if w.idle.value == 1:
+                    worker_idle[i] = True
+            if np.all(worker_idle):
+                break
+            time.sleep(2.0)
 
         # Set the terminate flag to shutdown
         if not self.terminate_flag.value:
