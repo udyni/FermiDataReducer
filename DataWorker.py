@@ -599,10 +599,10 @@ class DataWorker(multiprocessing.Process):
 
                         # Sum without binning
                         self.output[tag]['sig']['data'] += np.squeeze(np.sum(data[s_i, ...], axis=0))
-                        self.output[tag]['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = np.logical_not(bkg_mask)
+                        self.output[tag]['sig']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = s_i
                         if np.sum(b_i):
                             self.output[tag]['bkg']['data'] += np.squeeze(np.sum(data[b_i, ...], axis=0))
-                            self.output[tag]['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = bkg_mask
+                            self.output[tag]['bkg']['indexes'][self.s2s_index:self.s2s_index+self.file_shots] = b_i
 
                     except KeyError as e:
                         self.logger.error(f"Failed to reduce '{tag}' data for file '{os.path.basename(f)}' (Missing dataset: '{e}')")
