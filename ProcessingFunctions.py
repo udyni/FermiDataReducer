@@ -101,7 +101,8 @@ def generic_background_sequence(bunches, period, phase, slu_dec, slu_bn_start, s
         # Slu decimation is on
         slu_period = len(slu_sequence)
         slu_phase = np.mod(slu_bn_start, slu_period)
-        slu_on_sequence = slu_sequence[np.mod(bunches + slu_phase, slu_period)].astype(bool)
+        slu_indexes = np.mod(bunches - slu_phase, slu_period)
+        slu_on_sequence = slu_sequence[slu_indexes]
         return np.logical_not(slu_on_sequence)
 
     return np.full(bunches.shape, False, dtype=bool)
