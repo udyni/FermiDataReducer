@@ -366,6 +366,7 @@ class DataWorker(multiprocessing.Process):
                                     try:
                                         h5.File(f, 'r')
                                         self.logger.debug("[Run %d] Successfully open file %s", run_number, f)
+                                        break
                                     except Exception as e:
                                         self.logger.error("[Run %d] Failed to open file %s (Error: %s)", run_number, f, str(e))
                                         count += 1
