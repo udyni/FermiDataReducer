@@ -342,39 +342,38 @@ class DataWorker(multiprocessing.Process):
 
                                 # If the file is newer that 120 seconds, check that the file size is stable before trying to open it
                                 if (time.time() - s.st_mtime) < 120:
-                                    self.logger.debug("[Run %d] File %s is newer that 120s. Checking size", run_number, f)
-                                    last_size = s.st_size
+                                    self.logger.debug("[Run %d] File %s is newer that 120s. Checking if is the last one", run_number, f)
+                                    if new_files.index(f) >= len(new_files) - 1:
+                                        self.logger.debug("[Run %d] File %s is the last file. Checking size", run_number, f)
+                                        last_size = s.st_size
+                                        count = 0
+                                        while True:
+                                            time.sleep(0.5)
+                                            s = os.stat(f)
+                                            if s.st_size != last_size:
+                                                count = 0
+                                                last_size = s.st_size
+                                            else:
+                                                count += 1
+
+                                            # If the size was the same for the last 4 checks than go on
+                                            if count >= 4:
+                                                break
+
+                                while True:
+                                    # Try to open file. We try five times to open the file. If it continue to fail, we skip it
                                     count = 0
-                                    while True:
-                                        time.sleep(1)
-                                        s = os.stat(f)
-                                        if s.st_size != last_size:
-                                            count = 0
-                                            last_size = s.st_size
-                                        else:
-                                            count += 1
-
-                                        # If the size was the same for the last 4 checks than go on
-                                        if count >= 4:
+                                    try:
+                                        h5.File(f, 'r')
+                                        self.logger.debug("[Run %d] Successfully open file %s", run_number, f)
+                                    except Exception as e:
+                                        self.logger.error("[Run %d] Failed to open file %s (Error: %s)", run_number, f, str(e))
+                                        count += 1
+                                        time.sleep(2)
+                                        if count >= 5:
+                                            self.logger.error("[Run %d] Skipping bad file %s", run_number, f)
+                                            processed_files.append(f)
                                             break
-
-                                # Try to open file
-                                try:
-                                    h5.File(f, 'r')
-                                    self.logger.debug("[Run %d] Successfully open file %s", run_number, f)
-                                except Exception:
-                                    self.logger.debug("[Run %d] Failed to open file %s", run_number, f)
-                                    # Failed to open the file. It may be still in processing...
-                                    if f not in bad_files:
-                                        bad_files[f] = 0
-                                    bad_files[f] += 1
-                                    if bad_files[f] >= 5:
-                                        # We try 5 times, then give up and skip the file
-                                        processed_files.append(f)
-                                        continue
-                                    else:
-                                        # Open failed. Stop processing and try again
-                                        break
 
                                 # Copy new file if local path is defined
                                 if local_path is not None:
