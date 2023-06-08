@@ -223,6 +223,10 @@ class BrokerS2S:
             self.__fh = None
 
 
+class OutOfOrderFile(Exception):
+    pass
+
+
 class DataWorker(multiprocessing.Process):
 
     def __init__(self, job_queue, terminate_flag, options, log_queue, log_level=Logger.INFO):
@@ -320,9 +324,17 @@ class DataWorker(multiprocessing.Process):
                         self.logger.debug("[Run %d] Found %d new files", run_number, len(new_files))
 
                         # We have new files
-                        for f in new_files:
+                        for i, f in enumerate(new_files):
                             # We process one file at a time. To keep the ordering, if we found a problem with one file
-                            # we exit and start again after waiting a few seconds.
+                            # we stop there waiting for the file to become available. If the file is not readable after 5 tries
+                            # waiting 2 seconds between each try, the file is discarded
+
+                            # If we are approaching the end on the new files list and the list is not complete (all files for the run)
+                            # we stop and wait for more files to come. This should ensure that the files are read in the correct sequence
+                            # (it may happen that a preceding file arrives late on the storage)
+                            s = os.stat(f)
+                            if (time.time() - s.st_mtime) < 60 and i >= len(new_files) - 5 and len(new_files) - i + len(process_file) < self.total_files:
+                                break
 
                             # Check filename
                             m = p.match(os.path.basename(f))
@@ -334,6 +346,15 @@ class DataWorker(multiprocessing.Process):
                                     processed_files.append(f)
                                     last_file = time.time()
                                     continue
+
+                            # We check that the file follow in order the files already processed. This ensure that the s2s
+                            # data is sequential. It may happen that files appear on the storage out-of-order. This does not
+                            # affect the first reduction but prevents future reduction reusing s2s file.
+                            temp_processed = sorted(processed_files + [f, ])
+                            if temp_processed[-1] != f:
+                                # The file is out of order. We need to restart the data reduction
+                                # (there's no way to recover since we already summed up spectra and images)
+                                raise OutOfOrderFile
 
                             # Try to open the file
                             try:
@@ -444,6 +465,10 @@ class DataWorker(multiprocessing.Process):
 
                 # Done processing. Save results
                 self.save(run_number, save_path)
+
+            except OutOfOrderFile:
+                # To restart we put the run back on the queue
+                self.job_queue.put( (run_number, remote_path, local_path, save_path) )
 
             except queue.Empty:
                 # Nothing to be processed
