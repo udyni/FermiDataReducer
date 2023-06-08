@@ -88,7 +88,10 @@ def fit_padres_spectrum(spectrum, wavelength, p2m, span, roi):
 # =========================
 # Processing functions for background sequence
 def background_sequence(bunches, period, phase):
-    return np.mod(bunches, period) == phase
+    if period != -1:
+        return np.mod(bunches, period) == phase
+    else:
+        return np.zeros(bunches.shape, dtype=bool)
 
 def generic_background_sequence(bunches, period, phase, slu_dec, slu_bn_start, slu_sequence, slu_shutter):
     slu_on = (slu_dec != 'OFF' and slu_shutter == 1)
