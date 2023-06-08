@@ -332,9 +332,10 @@ class DataWorker(multiprocessing.Process):
                             # If we are approaching the end on the new files list and the list is not complete (all files for the run)
                             # we stop and wait for more files to come. This should ensure that the files are read in the correct sequence
                             # (it may happen that a preceding file arrives late on the storage)
-                            s = os.stat(f)
-                            if (time.time() - s.st_mtime) < 60 and i >= len(new_files) - 5 and (self.total_files is None or len(new_files) - i + len(process_file) < self.total_files):
-                                break
+                            if self.total_files is None or len(new_files) - i + len(process_file) < self.total_files:
+                                s = os.stat(f)
+                                if (time.time() - s.st_mtime) < 60 and i >= len(new_files) - 5:
+                                    break
 
                             # Check filename
                             m = p.match(os.path.basename(f))
