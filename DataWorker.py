@@ -332,8 +332,8 @@ class DataWorker(multiprocessing.Process):
                             # If we are approaching the end on the new files list and the list is not complete (all files for the run)
                             # we stop and wait for more files to come. This should ensure that the files are read in the correct sequence
                             # (it may happen that a preceding file arrives late on the storage)
-                            if self.total_files is None or len(new_files) - i + len(process_file) < self.total_files:
-                                self.logger.debug("[Run %d] waiting for new files to avoid out-of-order files (LN: %d, I: %d, TOT: %d)", run_number, len(new_files), i, self.total_files)
+                            if self.total_files is None or len(new_files) - i + len(processed_files) < self.total_files:
+                                self.logger.debug("[Run %d] waiting for new files to avoid out-of-order files (PF: %d, LN: %d, I: %d, TOT: %d)", run_number, len(processed_files), len(new_files), i, self.total_files)
                                 s = os.stat(f)
                                 if (time.time() - s.st_mtime) < 60 and i >= len(new_files) - 5:
                                     break
